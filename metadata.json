@@ -1,0 +1,7 @@
+{
+  "name": "Copy of Eid Greeting Surprise 5",
+  "description": "A beautiful interactive Eid al-Fitr greeting card with a 3D envelope opening animation, music, and a special surprise.",
+  "requestFramePermissions": [
+    "autoplay"
+  ]
+}
