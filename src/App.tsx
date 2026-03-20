@@ -15,61 +15,51 @@ export default function App() {
   const [recipientName, setRecipientName] = useState('أحلى الناس');
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioStatus, setAudioStatus] = useState<string>('جاهز');
-  const [imageSrc, setImageSrc] = useState(`${import.meta.env.BASE_URL}money.png`);
+  const [imageSrc, setImageSrc] = useState(`${import.meta.env.BASE_URL}money.png`.replace(/\/+/g, '/'));
   const soundRef = useRef<Howl | null>(null);
 
   useEffect(() => {
-    // Construct absolute path for Netlify compatibility
-    const origin = window.location.origin;
-    const base = import.meta.env.BASE_URL.replace(/\/$/, '');
-    const localAudioPath = `${origin}${base}/eid-music.m4a`;
-    
-    // Fallback to a hosted Eid music file if the local one fails
-    const fallbackAudioPath = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+    // Use BASE_URL for reliable pathing on Netlify/Vite
+    const baseUrl = import.meta.env.BASE_URL || '/';
+    const localAudioPath = `${baseUrl}eid-music.m4a`.replace(/\/+/g, '/');
+    const fallbackAudioPath = 'https://actions.google.com/sounds/v1/foley/wind_chime_fast.ogg'; // Reliable fallback
 
-    console.log("Attempting to load audio from:", localAudioPath);
+    console.log("Initializing audio with paths:", { localAudioPath, fallbackAudioPath });
 
     // Initialize Howl
     soundRef.current = new Howl({
       src: [localAudioPath, fallbackAudioPath],
-      html5: false, // Disable HTML5 Audio for small files to improve reliability in some environments
+      html5: true, 
+      preload: true,
       loop: true,
       volume: 1.0,
       onload: () => {
-        console.log("Audio loaded successfully:", localAudioPath);
-        setAudioStatus('جاهز للتشغيل');
+        console.log("Audio loaded successfully");
+        setAudioStatus('جاهز');
       },
       onloaderror: (id, error) => {
-        console.error("Howler load error:", error, "Path:", localAudioPath);
-        setAudioStatus('خطأ في التحميل');
+        console.error("Audio load error:", error);
+        setAudioStatus('خطأ');
       },
-      onplay: () => {
-        console.log("Audio started playing");
-        setIsPlaying(true);
-        setAudioStatus('يعمل الآن');
-      },
-      onplayerror: (id, error) => {
-        console.error("Howler play error:", error);
-        setAudioStatus('خطأ في التشغيل');
-        // Try to unlock audio context
-        if (soundRef.current) {
-          soundRef.current.once('unlock', () => {
-            soundRef.current?.play();
-          });
-        }
-      }
+      onplay: () => setIsPlaying(true),
+      onpause: () => setIsPlaying(false),
+      onstop: () => setIsPlaying(false),
     });
 
+    // Ensure audio context is unlocked
+    Howler.autoUnlock = true;
+
     return () => {
-      if (soundRef.current) {
-        soundRef.current.unload();
-      }
+      if (soundRef.current) soundRef.current.unload();
     };
   }, []);
 
   const handleImageError = () => {
-    // Fallback to a real 50 Jordanian Dinars image if the local one fails
-    setImageSrc('https://upload.wikimedia.org/wikipedia/commons/thumb/1/1d/50_Jordanian_Dinars_Obverse.jpg/800px-50_Jordanian_Dinars_Obverse.jpg');
+    // Immediate fallback to a guaranteed working URL of 50 JOD
+    const fallbackUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1d/50_Jordanian_Dinars_Obverse.jpg/800px-50_Jordanian_Dinars_Obverse.jpg';
+    if (imageSrc !== fallbackUrl) {
+      setImageSrc(fallbackUrl);
+    }
   };
 
   const [audioError, setAudioError] = React.useState<string | null>(null);
@@ -88,12 +78,25 @@ export default function App() {
     if (!isOpen && !isOpening) {
       setIsOpening(true);
       
-      // Force play audio with Howler
+      // Attempt to play audio immediately on interaction
       if (soundRef.current) {
+        // Resume context if suspended (common in browsers)
+        if (Howler.ctx && Howler.ctx.state === 'suspended') {
+          Howler.ctx.resume();
+        }
+        
         soundRef.current.play();
+        
+        // Double check play after a short delay (helps on mobile/Netlify)
+        setTimeout(() => {
+          if (soundRef.current && !soundRef.current.playing()) {
+            console.log("Retrying audio play...");
+            soundRef.current.play();
+          }
+        }, 300);
       }
       
-      // Delay the actual "open" state to allow flap animation (faster now)
+      // Delay the actual "open" state to allow flap animation
       setTimeout(() => {
         setIsOpen(true);
         setIsOpening(false);
